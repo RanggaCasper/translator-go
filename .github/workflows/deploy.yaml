@@ -1,0 +1,180 @@
+name: Deploy to VPS (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_path:
+        description: "Folder deploy di VPS (default: /opt/server)"
+        required: false
+        default: "/opt/server"
+        type: string
+      systemd_service:
+        description: "Nama systemd service untuk restart (default: server)"
+        required: false
+        default: "server"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-linux-amd64:
+    runs-on: ubuntu-latest
+    outputs:
+      detected_app_name: ${{ steps.detect.outputs.app_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build (linux/amd64)
+        env:
+          GOOS: linux
+          GOARCH: amd64
+          CGO_ENABLED: "0"
+          VERSION: ${{ github.sha }}
+          OUT_DIR: bin
+        run: |
+          set -euo pipefail
+          make build
+          echo "==> Build output:"
+          ls -lah bin
+
+      - name: Detect built binary name
+        id: detect
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find bin -maxdepth 1 -type f -printf "%f\n" | sort)
+
+          echo "==> Files in bin/:"
+          printf '%s\n' "${files[@]}"
+
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "ERROR: no files found in bin/"
+            exit 1
+          fi
+
+          if [ "${#files[@]}" -gt 1 ]; then
+            echo "ERROR: multiple files found in bin/. Please output only one binary."
+            exit 1
+          fi
+
+          APP_NAME="${files[0]}"
+          echo "Detected app_name=$APP_NAME"
+          echo "app_name=$APP_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifact (binary only)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-linux-amd64
+          path: |
+            bin/${{ steps.detect.outputs.app_name }}
+          if-no-files-found: error
+
+  deploy:
+    needs: build-linux-amd64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app-linux-amd64
+          path: ./artifact
+
+      - name: Prepare deploy files (validate)
+        run: |
+          set -euo pipefail
+          APP="${{ needs.build-linux-amd64.outputs.detected_app_name }}"
+
+          echo "==> Artifact files:"
+          find ./artifact -maxdepth 2 -type f -print
+
+          BIN="./artifact/${APP}"
+          test -f "$BIN" || (echo "ERROR: expected binary not found at: $BIN" && exit 1)
+          chmod +x "$BIN"
+
+          test -f "scripts/startup.sh" || (echo "ERROR: scripts/startup.sh not found" && exit 1)
+
+          echo "Using APP=$APP"
+          ls -lah ./artifact
+          ls -lah scripts/startup.sh
+
+      # Upload binary: source pakai artifact/<file>, target ke root deploy folder agar tidak dobel
+      - name: Upload binary to VPS (SCP)
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: 22
+          source: "artifact/${{ needs.build-linux-amd64.outputs.detected_app_name }}"
+          target: "/tmp/deploy-${{ needs.build-linux-amd64.outputs.detected_app_name }}/"
+          overwrite: true
+
+      # Upload startup.sh: source scripts/startup.sh, target root juga
+      - name: Upload startup.sh to VPS (SCP)
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: 22
+          source: "scripts/startup.sh"
+          target: "/tmp/deploy-${{ needs.build-linux-amd64.outputs.detected_app_name }}/"
+          overwrite: true
+
+      - name: Deploy (SSH) - atomic swap, run startup.sh, restart service
+        uses: appleboy/ssh-action@v1.1.0
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: 22
+          script: |
+            set -euo pipefail
+
+            APP="${{ needs.build-linux-amd64.outputs.detected_app_name }}"
+            DEPLOY_PATH="${{ inputs.deploy_path }}"
+            SERVICE="${{ inputs.systemd_service }}"
+
+            # Karena source-nya artifact/<APP> dan scripts/startup.sh,
+            # di VPS path-nya akan:
+            SRC_BIN="/tmp/deploy-${APP}/artifact/${APP}"
+            SRC_STARTUP="/tmp/deploy-${APP}/scripts/startup.sh"
+
+            echo "==> Check uploaded files"
+            find "/tmp/deploy-${APP}" -maxdepth 5 -type f -print || true
+
+            test -f "$SRC_BIN" || (echo "ERROR: uploaded binary not found at $SRC_BIN" && exit 1)
+            test -f "$SRC_STARTUP" || (echo "ERROR: startup.sh not found at $SRC_STARTUP" && exit 1)
+
+            echo "==> Ensure deploy dir"
+            sudo mkdir -p "${DEPLOY_PATH}"
+            sudo chown -R "$(whoami)":"$(whoami)" "${DEPLOY_PATH}" || true
+
+            echo "==> Move uploaded binary into place"
+            sudo mv "$SRC_BIN" "${DEPLOY_PATH}/${APP}.new"
+            sudo chmod +x "${DEPLOY_PATH}/${APP}.new"
+
+            echo "==> Atomic swap"
+            if [ -f "${DEPLOY_PATH}/${APP}" ]; then
+              sudo mv "${DEPLOY_PATH}/${APP}" "${DEPLOY_PATH}/${APP}.bak" || true
+            fi
+            sudo mv "${DEPLOY_PATH}/${APP}.new" "${DEPLOY_PATH}/${APP}"
+
+            echo "==> Run startup.sh (provisioning)"
+            sudo chmod +x "$SRC_STARTUP"
+            sudo bash "$SRC_STARTUP"
+
+            echo "==> Restart service"
+            sudo systemctl daemon-reload || true
+            sudo systemctl restart "${SERVICE}"
+            sudo systemctl --no-pager status "${SERVICE}" -l || true
+
+            echo "Deploy selesai: ${DEPLOY_PATH}/${APP}"

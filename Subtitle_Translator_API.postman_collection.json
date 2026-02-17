@@ -1,0 +1,162 @@
+{
+  "info": {
+    "name": "Subtitle Translator API",
+    "description": "API collection for Subtitle Translator service",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/health",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "health"]
+        }
+      }
+    },
+    {
+      "name": "Translate Subtitle",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"url\": \"https://example.com/subtitle.vtt\",\n  \"format\": \"vtt\",\n  \"target_lang\": \"id\",\n  \"source_lang\": \"auto\",\n  \"referer\": \"https://example.com\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/subtitles/translate",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "subtitles", "translate"]
+        }
+      }
+    },
+    {
+      "name": "Translate Single Text",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"Aku mau pergi ke pasar besok.\",\n  \"target_lang\": \"en\",\n  \"source_lang\": \"auto\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/subtitles/translate/text",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "subtitles", "translate", "text"]
+        }
+      }
+    },
+    {
+      "name": "Translate Batch Content",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"target_lang\": \"en\",\n  \"source_lang\": \"auto\",\n  \"data\": {\n    \"title\": \"Tuan Misteri 2 Lingkaran Yang Tak Terhindarkan - Chapter 484\",\n    \"content\": [\n      {\n        \"type\": \"heading\",\n        \"text\": \"Chapter 484: Ejekan\",\n        \"src\": null\n      },\n      {\n        \"type\": \"text\",\n        \"text\": \"Franca sama sekali tidak terkejut...\",\n        \"src\": null\n      }\n    ]\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/subtitles/translate/batch",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "subtitles", "translate", "batch"]
+        }
+      }
+    },
+    {
+      "name": "Get All Subtitles",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/subtitles?page=1&limit=10&target_lang=id",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "subtitles"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "10"
+            },
+            {
+              "key": "target_lang",
+              "value": "id"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Subtitle by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/subtitles/1",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "subtitles", "1"]
+        }
+      }
+    },
+    {
+      "name": "Update Subtitle",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"content\": \"WEBVTT\\n\\n1\\n00:00:01.000 --> 00:00:03.000\\nHalo, gimana kabarnya?\\n\\n\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/subtitles/1",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "subtitles", "1"]
+        }
+      }
+    },
+    {
+      "name": "Delete Subtitle",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/subtitles/1",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "subtitles", "1"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    }
+  ]
+}

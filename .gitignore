@@ -1,0 +1,43 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Dependencies
+vendor/
+
+# TMP
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Go workspace
+go.work
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Application
+subtitle-translator
+subtitle-translator.exe
+logs/
+*.log
+
+# Storage directory (subtitle files)
+storage/
