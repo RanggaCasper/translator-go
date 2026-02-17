@@ -1,4 +1,4 @@
-# Subtitle Translator API
+# Transaltor
 
 A high-performance subtitle translation service built with Go and Fiber framework. This API translates VTT and ASS subtitle files to Indonesian (or any target language) using Google Translate, with **MySQL database for metadata** and **file system for content storage**.
 
@@ -135,7 +135,7 @@ Check if API is running.
 {
   "status": true,
   "data": {
-    "message": "Subtitle Translator API is running",
+    "message": "Transaltor is running",
     "version": "2.0.0"
   }
 }

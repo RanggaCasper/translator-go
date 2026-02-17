@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - 2026-02-18
 
 ### Added
-- Initial public release of Subtitle Translator API with Go + Fiber architecture.
+- Initial public release of Transaltor with Go + Fiber architecture.
 - API versioning with base path `POST/GET/PUT/DELETE /api/v1/subtitles`.
 - `POST /api/v1/subtitles/translate` for subtitle URL translation (`vtt` and `ass` input).
 - `POST /api/v1/subtitles/translate/text` for single sentence/text translation.
@@ -34,4 +34,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions release workflow for cross-platform build and asset publishing.
 - Comprehensive `README.md` and Postman collection (`Subtitle_Translator_API.postman_collection.json`) for API usage.
 
-[1.0.0]: https://github.com/RanggaCasper/subtitle-translator-go/releases/tag/v1.0.0
+[1.0.0]: https://github.com/RanggaCasper/translator-go/releases/tag/v1.0.0
