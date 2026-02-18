@@ -1,7 +1,7 @@
 .PHONY: help build run test clean deps dev
 
 # Variables
-APP_NAME=subtitle
+APP_NAME=translator
 BUILD_DIR=bin
 MAIN_PATH=cmd/server/main.go
 

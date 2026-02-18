@@ -6,7 +6,7 @@ SITE_NAME="${SITE_NAME:-server}"
 
 SERVICE_NAME="${SERVICE_NAME:-server}"
 DEPLOY_PATH="${DEPLOY_PATH:-/opt/server}"
-APP_BINARY="${APP_BINARY:-subtitle-translator}"
+APP_BINARY="${APP_BINARY:-translator}"
 ENV_PORT="${ENV_PORT:-3000}"
 OVERWRITE_UNIT="${OVERWRITE_UNIT:-false}"
 
