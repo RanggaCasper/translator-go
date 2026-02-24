@@ -56,9 +56,14 @@ else
   ENV_PORT="${ENV_PORT:-${PORT:-3000}}"
 fi
 
-echo "==> Installing nginx"
-sudo apt-get update -y
-sudo apt-get install -y nginx
+echo "==> Checking nginx installation"
+if command -v nginx >/dev/null 2>&1; then
+  echo "✓ nginx already installed, skipping installation"
+else
+  echo "==> Installing nginx"
+  sudo apt-get update -y
+  sudo apt-get install -y nginx
+fi
 
 echo "==> Enabling nginx"
 sudo systemctl enable nginx
@@ -98,8 +103,13 @@ echo "==> Testing nginx"
 sudo nginx -t
 sudo systemctl reload nginx
 
-echo "==> Installing MySQL server"
-sudo apt-get install -y mysql-server
+echo "==> Checking MySQL installation"
+if command -v mysql >/dev/null 2>&1; then
+  echo "✓ MySQL already installed, skipping installation"
+else
+  echo "==> Installing MySQL server"
+  sudo apt-get install -y mysql-server
+fi
 
 echo "==> Enabling MySQL"
 sudo systemctl enable mysql
