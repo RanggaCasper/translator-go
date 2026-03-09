@@ -70,10 +70,8 @@ func FormalizeToInformal(text string) string {
 		// Common phrases
 		`\btidak ada\b`:    "nggak ada",
 		`\bTidak ada\b`:    "Nggak ada",
-		`\bapakah\b`:       "",
 		`\btetapi\b`:       "tapi",
 		`\bsedang\b`:       "lagi",
-		`\bakan\b`:         "mau",
 		`\btelah\b`:        "udah",
 		`\bsudah\b`:        "udah",
 		`\bbelum\b`:        "belom",
@@ -97,7 +95,6 @@ func FormalizeToInformal(text string) string {
 		`\bbenarkah\b`:     "beneran?",
 		`\bterima kasih\b`: "makasih",
 		`\bTerima kasih\b`: "Makasih",
-		`\bpermisi\b`:      "eh",
 		`\btersebut\b`:     "itu",
 		`\bberkata\b`:      "bilang",
 		`\bberbicara\b`:    "ngomong",
