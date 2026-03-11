@@ -17,7 +17,6 @@ func FormalizeToInformal(text string) string {
 		`\bAnda semua\b`: "kalian",
 		`\bAnda\b`:       "kamu",
 		`\bIa\b`:         "dia",
-		`\bDia\b`:        "Dia",
 		`\bSaya\b`:       "Aku",
 		`\bsaya\b`:       "aku",
 		`\bKami\b`:       "Kita",
@@ -25,7 +24,6 @@ func FormalizeToInformal(text string) string {
 
 		// Verbs
 		`\bmengatakan\b`:    "bilang",
-		`\bmemberikan\b`:    "kasih",
 		`\bmembuat\b`:       "bikin",
 		`\bmemakan\b`:       "makan",
 		`\bmeminum\b`:       "minum",
@@ -72,7 +70,6 @@ func FormalizeToInformal(text string) string {
 		`\bTidak ada\b`:    "Nggak ada",
 		`\btetapi\b`:       "tapi",
 		`\bsedang\b`:       "lagi",
-		`\btelah\b`:        "udah",
 		`\bsudah\b`:        "udah",
 		`\bbelum\b`:        "belom",
 		`\btidak\b`:        "nggak",
