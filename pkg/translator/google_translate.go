@@ -89,9 +89,10 @@ func GoogleTranslate(text, targetLang, sourceLang string) (string, error) {
 		}
 	}
 
-	// Apply informal style for Indonesian
+	// Apply Indonesian post-processing for subtitle naturalness.
 	if targetLang == "id" {
 		translated = FormalizeToInformal(translated)
+		translated = EnhanceIndonesianSubtitle(translated)
 	}
 
 	return translated, nil

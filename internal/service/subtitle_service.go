@@ -3,6 +3,7 @@ package service
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -15,8 +16,10 @@ import (
 	"gorm.io/gorm"
 )
 
+var ErrSubtitleLocked = errors.New("subtitle is locked")
+
 type SubtitleService interface {
-	TranslateSubtitle(url, format, targetLang, sourceLang, referer string) (*models.SubtitleWithContent, error)
+	TranslateSubtitle(url, format, targetLang, sourceLang, referer string, isRefresh, isLock bool) (*models.SubtitleWithContent, error)
 	TranslateTexts(texts []string, targetLang, sourceLang string) ([]string, error)
 	GetAllSubtitles(page, limit int, targetLang string) ([]models.Subtitle, int64, int, error)
 	GetSubtitleByID(id uint) (*models.SubtitleWithContent, error)
@@ -34,7 +37,7 @@ func NewSubtitleService(repo repository.SubtitleRepository) SubtitleService {
 	}
 }
 
-func (s *subtitleService) TranslateSubtitle(url, format, targetLang, sourceLang, referer string) (*models.SubtitleWithContent, error) {
+func (s *subtitleService) TranslateSubtitle(url, format, targetLang, sourceLang, referer string, isRefresh, isLock bool) (*models.SubtitleWithContent, error) {
 	// Generate subtitle ID
 	subtitleID := s.generateSubtitleID(url, targetLang, format)
 	filePath := repository.GenerateFilePath(subtitleID)
@@ -42,7 +45,44 @@ func (s *subtitleService) TranslateSubtitle(url, format, targetLang, sourceLang,
 	// Check if already exists in database
 	existing, err := s.repo.GetBySubtitleID(subtitleID)
 	if err == nil {
+		if existing.IsLock && isRefresh {
+			return nil, ErrSubtitleLocked
+		}
+
 		log.Printf("Subtitle already exists in DB with ID: %s, loading from file", subtitleID[:8])
+
+		if isRefresh {
+			content, err := translator.FetchAndTranslate(url, format, targetLang, sourceLang, referer)
+			if err != nil {
+				return nil, err
+			}
+			content = translator.PostProcessSubtitleContent(content, targetLang)
+
+			existing.IsLock = existing.IsLock || isLock
+			existing.FileSize = int64(len(content))
+			existing.UpdatedAt = time.Now()
+			if err := s.repo.UpdateContent(existing.ID, content); err != nil {
+				return nil, fmt.Errorf("failed to update refreshed content: %w", err)
+			}
+			if err := s.repo.Update(existing); err != nil {
+				return nil, fmt.Errorf("failed to update refreshed subtitle metadata: %w", err)
+			}
+
+			return &models.SubtitleWithContent{
+				ID:         existing.ID,
+				SubtitleID: existing.SubtitleID,
+				URL:        existing.URL,
+				TargetLang: existing.TargetLang,
+				SourceLang: existing.SourceLang,
+				Format:     existing.Format,
+				FilePath:   existing.FilePath,
+				Content:    content,
+				FileSize:   existing.FileSize,
+				IsLock:     existing.IsLock,
+				CreatedAt:  existing.CreatedAt,
+				UpdatedAt:  existing.UpdatedAt,
+			}, nil
+		}
 
 		// Keep stored path URL-safe across platforms
 		normalizedPath := filepath.ToSlash(existing.FilePath)
@@ -58,11 +98,18 @@ func (s *subtitleService) TranslateSubtitle(url, format, targetLang, sourceLang,
 		if err != nil {
 			return nil, fmt.Errorf("failed to load content: %w", err)
 		}
-		cleanedContent := translator.RemoveFontTags(content)
+		cleanedContent := translator.PostProcessSubtitleContent(content, existing.TargetLang)
 		if cleanedContent != content {
 			content = cleanedContent
 			if updateErr := s.repo.UpdateContent(existing.ID, content); updateErr != nil {
 				log.Printf("Failed to persist cleaned content for subtitle ID %s: %v", subtitleID[:8], updateErr)
+			}
+		}
+
+		if isLock && !existing.IsLock {
+			existing.IsLock = true
+			if updateErr := s.repo.Update(existing); updateErr != nil {
+				log.Printf("Failed to lock subtitle ID %s: %v", subtitleID[:8], updateErr)
 			}
 		}
 
@@ -76,6 +123,7 @@ func (s *subtitleService) TranslateSubtitle(url, format, targetLang, sourceLang,
 			FilePath:   existing.FilePath,
 			Content:    content,
 			FileSize:   existing.FileSize,
+			IsLock:     existing.IsLock,
 			CreatedAt:  existing.CreatedAt,
 			UpdatedAt:  existing.UpdatedAt,
 		}, nil
@@ -92,7 +140,7 @@ func (s *subtitleService) TranslateSubtitle(url, format, targetLang, sourceLang,
 	if err != nil {
 		return nil, err
 	}
-	content = translator.RemoveFontTags(content)
+	content = translator.PostProcessSubtitleContent(content, targetLang)
 
 	// Create subtitle record
 	subtitle := &models.Subtitle{
@@ -103,6 +151,7 @@ func (s *subtitleService) TranslateSubtitle(url, format, targetLang, sourceLang,
 		Format:     format,
 		FilePath:   filePath,
 		FileSize:   int64(len(content)),
+		IsLock:     isLock,
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
 	}
@@ -123,6 +172,7 @@ func (s *subtitleService) TranslateSubtitle(url, format, targetLang, sourceLang,
 		FilePath:   subtitle.FilePath,
 		Content:    content,
 		FileSize:   subtitle.FileSize,
+		IsLock:     subtitle.IsLock,
 		CreatedAt:  subtitle.CreatedAt,
 		UpdatedAt:  subtitle.UpdatedAt,
 	}, nil
@@ -171,7 +221,7 @@ func (s *subtitleService) GetSubtitleByID(id uint) (*models.SubtitleWithContent,
 	if err != nil {
 		return nil, fmt.Errorf("failed to load content: %w", err)
 	}
-	cleanedContent := translator.RemoveFontTags(content)
+	cleanedContent := translator.PostProcessSubtitleContent(content, subtitle.TargetLang)
 	if cleanedContent != content {
 		content = cleanedContent
 		if updateErr := s.repo.UpdateContent(subtitle.ID, content); updateErr != nil {
@@ -189,6 +239,7 @@ func (s *subtitleService) GetSubtitleByID(id uint) (*models.SubtitleWithContent,
 		FilePath:   subtitle.FilePath,
 		Content:    content,
 		FileSize:   subtitle.FileSize,
+		IsLock:     subtitle.IsLock,
 		CreatedAt:  subtitle.CreatedAt,
 		UpdatedAt:  subtitle.UpdatedAt,
 	}, nil

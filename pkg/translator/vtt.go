@@ -6,6 +6,11 @@ import (
 	"strings"
 )
 
+const (
+	maxCueTextLines = 3
+	maxCueWords     = 25
+)
+
 var (
 	vttTimestampRe = regexp.MustCompile(`^(?P<s>(?:\d{1,2}:)?\d{2}:\d{2}[.,]\d{3})\s*-->\s*(?P<e>(?:\d{1,2}:)?\d{2}:\d{2}[.,]\d{3})(?P<rest>.*)$`)
 	vttTagRe       = regexp.MustCompile(`<[^>]+>`)
@@ -16,11 +21,17 @@ var (
 // TranslateVTT parses VTT subtitle, translates text lines, and returns translated VTT content
 func TranslateVTT(content, targetLang, sourceLang string) (string, error) {
 	lines := strings.Split(content, "\n")
+	blockedLines := markLongCueBlocks(lines)
 
 	var textIndices []int
 	var textValues []string
 
 	for i, line := range lines {
+		if blockedLines[i] {
+			lines[i] = ""
+			continue
+		}
+
 		// Remove font tags that should not appear in output
 		line = RemoveFontTags(line)
 		lines[i] = line
@@ -87,14 +98,73 @@ func TranslateVTT(content, targetLang, sourceLang string) (string, error) {
 		transFixed := SingleLine(trans)
 		transFixed = strings.TrimSpace(RemoveFontTags(transFixed))
 		if transFixed == "" {
-			// Fallback to source text if translation comes back empty
-			transFixed = strings.TrimSpace(vttTagRe.ReplaceAllString(original, ""))
+			// Keep line empty for Indonesian when post-processing removes non-subtitle notes.
+			if strings.ToLower(targetLang) != "id" {
+				// Fallback to source text if translation comes back empty.
+				transFixed = strings.TrimSpace(vttTagRe.ReplaceAllString(original, ""))
+			}
 		}
 
 		lines[lineIdx] = RemoveFontTags(leadingTags + transFixed + trailingTags)
 	}
 
 	return strings.Join(lines, "\n"), nil
+}
+
+func markLongCueBlocks(lines []string) map[int]bool {
+	blocked := make(map[int]bool)
+	start := 0
+
+	for start < len(lines) {
+		for start < len(lines) && strings.TrimSpace(RemoveFontTags(lines[start])) == "" {
+			start++
+		}
+		if start >= len(lines) {
+			break
+		}
+
+		end := start
+		for end < len(lines) && strings.TrimSpace(RemoveFontTags(lines[end])) != "" {
+			end++
+		}
+
+		if shouldDropVTTBlock(lines[start:end]) {
+			for i := start; i < end; i++ {
+				blocked[i] = true
+			}
+		}
+
+		start = end
+	}
+
+	return blocked
+}
+
+func shouldDropVTTBlock(block []string) bool {
+	timestampIdx := -1
+	for i, line := range block {
+		if vttTimestampRe.MatchString(strings.TrimSpace(RemoveFontTags(line))) {
+			timestampIdx = i
+			break
+		}
+	}
+
+	if timestampIdx == -1 {
+		return false
+	}
+
+	textLines := 0
+	wordCount := 0
+	for i := timestampIdx + 1; i < len(block); i++ {
+		trimmed := strings.TrimSpace(RemoveFontTags(block[i]))
+		if trimmed == "" || isDigitOnly(trimmed) || isStandalonePunctuationLine(trimmed) {
+			continue
+		}
+		textLines++
+		wordCount += len(strings.Fields(trimmed))
+	}
+
+	return textLines > maxCueTextLines || wordCount > maxCueWords
 }
 
 func normalizeTimestampLine(line string) string {

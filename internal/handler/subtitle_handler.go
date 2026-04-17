@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"subtitle-translator/internal/service"
@@ -23,6 +24,8 @@ type TranslateRequest struct {
 	TargetLang string `json:"target_lang"`
 	SourceLang string `json:"source_lang"`
 	Referer    string `json:"referer"`
+	IsRefresh  bool   `json:"is_refresh"`
+	IsLock     bool   `json:"is_lock"`
 }
 
 type UpdateSubtitleRequest struct {
@@ -71,6 +74,12 @@ func (h *SubtitleHandler) TranslateSubtitle(c *fiber.Ctx) error {
 	if req.SourceLang == "" {
 		req.SourceLang = c.Query("source_lang", "auto")
 	}
+	if c.Query("is_refresh") == "true" {
+		req.IsRefresh = true
+	}
+	if c.Query("is_lock") == "true" {
+		req.IsLock = true
+	}
 
 	// Validate
 	if req.URL == "" {
@@ -96,9 +105,19 @@ func (h *SubtitleHandler) TranslateSubtitle(c *fiber.Ctx) error {
 		req.TargetLang,
 		req.SourceLang,
 		req.Referer,
+		req.IsRefresh,
+		req.IsLock,
 	)
 
 	if err != nil {
+		if errors.Is(err, service.ErrSubtitleLocked) {
+			return c.Status(fiber.StatusLocked).JSON(utils.ErrorResponse{
+				Status:  false,
+				Error:   "Subtitle is locked",
+				Message: err.Error(),
+			})
+		}
+
 		return c.Status(fiber.StatusInternalServerError).JSON(utils.ErrorResponse{
 			Status:  false,
 			Error:   "Translation failed",

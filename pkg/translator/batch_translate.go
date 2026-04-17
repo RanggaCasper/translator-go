@@ -86,7 +86,7 @@ func tryBatchTranslate(chunk []indexedText, targetLang, sourceLang string, resul
 	tokenBytes := make([]byte, 8)
 	rand.Read(tokenBytes)
 	token := fmt.Sprintf("RANIMESEP%sRANIMESEP", hex.EncodeToString(tokenBytes))
-	separator := fmt.Sprintf(" %s ", token)
+	separator := fmt.Sprintf("⟪%s⟫", token)
 
 	// Combine texts
 	var combined strings.Builder
@@ -105,7 +105,7 @@ func tryBatchTranslate(chunk []indexedText, targetLang, sourceLang string, resul
 	}
 
 	// Split results
-	parts := strings.Split(translated, token)
+	parts := splitTranslatedBatch(translated, token)
 
 	if len(parts) != len(chunk) {
 		log.Printf("Batch split mismatch (got %d parts for %d lines)", len(parts), len(chunk))
@@ -122,6 +122,17 @@ func tryBatchTranslate(chunk []indexedText, targetLang, sourceLang string, resul
 	mutex.Unlock()
 
 	return true
+}
+
+func splitTranslatedBatch(translated, token string) []string {
+	pattern := fmt.Sprintf(`\s*⟪%s⟫\s*`, regexp.QuoteMeta(token))
+	re := regexp.MustCompile(pattern)
+	parts := re.Split(translated, -1)
+	if len(parts) > 1 {
+		return parts
+	}
+
+	return strings.Split(translated, token)
 }
 
 func translateConcurrent(chunk []indexedText, targetLang, sourceLang string, result []string, mutex *sync.Mutex) {

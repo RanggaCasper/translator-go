@@ -83,7 +83,6 @@ func FormalizeToInformal(text string) string {
 		`\bkarena\b`:       "soalnya",
 		`\bnamun\b`:        "tapi",
 		`\bagar\b`:         "biar",
-		`\buntuk\b`:        "buat",
 		`\bkepada\b`:       "ke",
 		`\bsegera\b`:       "cepet",
 		`\bselalu\b`:       "terus",

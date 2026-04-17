@@ -16,6 +16,7 @@ type Subtitle struct {
 	Format     string         `gorm:"size:10;not null" json:"format"`
 	FilePath   string         `gorm:"type:varchar(500);not null" json:"file_path"` // Path to VTT file
 	FileSize   int64          `gorm:"not null" json:"file_size"`
+	IsLock     bool           `gorm:"not null;default:false;index" json:"is_lock"`
 	CreatedAt  time.Time      `json:"created_at"`
 	UpdatedAt  time.Time      `json:"updated_at"`
 	DeletedAt  gorm.DeletedAt `gorm:"index" json:"-"`
@@ -37,6 +38,7 @@ type SubtitleWithContent struct {
 	FilePath   string    `json:"file_path"`
 	Content    string    `json:"content"` // Loaded from file
 	FileSize   int64     `json:"file_size"`
+	IsLock     bool      `json:"is_lock"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 }

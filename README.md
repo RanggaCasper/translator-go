@@ -156,7 +156,9 @@ Translate subtitle from URL. Saves metadata to database and content to file.
   "format": "vtt",
   "target_lang": "id",
   "source_lang": "auto",
-  "referer": "https://example.com"
+  "referer": "https://example.com",
+  "is_refresh": false,
+  "is_lock": false
 }
 ```
 
@@ -169,6 +171,8 @@ Translate subtitle from URL. Saves metadata to database and content to file.
 | `target_lang` | string | No | `id` | Target language code |
 | `source_lang` | string | No | `auto` | Source language code |
 | `referer` | string | No | - | HTTP Referer header |
+| `is_refresh` | boolean | No | `false` | Regenerate subtitle content even if it already exists |
+| `is_lock` | boolean | No | `false` | Lock the subtitle so it cannot be refreshed again |
 
 **Success Response:**
 ```json
