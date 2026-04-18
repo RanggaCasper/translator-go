@@ -2,7 +2,7 @@
 
 A high-performance subtitle translation service built with Go and Fiber framework. This API translates VTT and ASS subtitle files to Indonesian (or any target language) using Google Translate, with **MySQL database for metadata** and **file system for content storage**.
 
-Current release: [`v1.0.0`](./changelog.md)
+Current release: [`v1.0.4`](./changelog.md)
 
 ## Features
 
