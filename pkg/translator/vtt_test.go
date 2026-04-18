@@ -1,6 +1,9 @@
 package translator
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestMarkLongCueBlocks_SkipsBlocksWithMoreThanThreeTextLines(t *testing.T) {
 	lines := []string{
@@ -50,5 +53,66 @@ func TestMarkLongCueBlocks_SkipsSingleLineCueWhenWordsExceedLimit(t *testing.T) 
 
 	if blocked[5] || blocked[6] {
 		t.Fatalf("expected short cue to remain unblocked")
+	}
+}
+
+func TestCollectVTTCueBatches_GroupsByTimestamp(t *testing.T) {
+	lines := []string{
+		"WEBVTT",
+		"",
+		"00:17.976 --> 00:19.853",
+		"A SPRING BREEZE BLOWS",
+		"THROUGH THE YOZAKURAS",
+		"",
+		"00:20.437 --> 00:23.732",
+		"Sui! You know that Asano kid",
+		"who married into the Yozakura family?",
+	}
+
+	blocked := markLongCueBlocks(lines)
+	cues := collectVTTCueBatches(lines, blocked)
+
+	if len(cues) != 2 {
+		t.Fatalf("expected 2 cue batches, got %d", len(cues))
+	}
+
+	if cues[0].originalText != "A SPRING BREEZE BLOWS\nTHROUGH THE YOZAKURAS" {
+		t.Fatalf("unexpected first cue text: %q", cues[0].originalText)
+	}
+
+	if cues[1].originalText != "Sui! You know that Asano kid\nwho married into the Yozakura family?" {
+		t.Fatalf("unexpected second cue text: %q", cues[1].originalText)
+	}
+
+	if lines[2] != "00:00:17.976 --> 00:00:19.853" {
+		t.Fatalf("expected normalized first timestamp, got %q", lines[2])
+	}
+
+	if lines[6] != "00:00:20.437 --> 00:00:23.732" {
+		t.Fatalf("expected normalized second timestamp, got %q", lines[6])
+	}
+}
+
+func TestApplyTranslatedCue_DistributesTranslatedLinesToCueSlots(t *testing.T) {
+	lines := []string{
+		"WEBVTT",
+		"",
+		"00:00:17.976 --> 00:00:19.853",
+		"A SPRING BREEZE BLOWS",
+		"THROUGH THE YOZAKURAS",
+		"",
+	}
+
+	cue := vttCueBatch{
+		textLineIndices: []int{3, 4},
+		originalText:    "A SPRING BREEZE BLOWS\nTHROUGH THE YOZAKURAS",
+	}
+
+	applyTranslatedCue(lines, cue, "ANGIN MUSIM SEMI BERHEMBUS\nMELALUI KELUARGA YOZAKURA", "id")
+
+	want := []string{"ANGIN MUSIM SEMI BERHEMBUS", "MELALUI KELUARGA YOZAKURA"}
+	got := []string{lines[3], lines[4]}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected cue replacement: got %#v want %#v", got, want)
 	}
 }

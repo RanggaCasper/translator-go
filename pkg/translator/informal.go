@@ -16,6 +16,7 @@ func FormalizeToInformal(text string) string {
 		// Pronouns
 		`\bAnda semua\b`: "kalian",
 		`\bAnda\b`:       "kamu",
+		`\anda\b`:        "kamu",
 		`\bIa\b`:         "dia",
 		`\bSaya\b`:       "Aku",
 		`\bsaya\b`:       "aku",
@@ -31,8 +32,6 @@ func FormalizeToInformal(text string) string {
 		`\bmelihat\b`:       "lihat",
 		`\bmendengar\b`:     "denger",
 		`\bmendengarkan\b`:  "dengerin",
-		`\bmembawa\b`:       "bawa",
-		`\bmenggunakan\b`:   "pake",
 		`\bmelakukan\b`:     "lakuin",
 		`\bmendapatkan\b`:   "dapet",
 		`\bmenemukan\b`:     "nemuin",

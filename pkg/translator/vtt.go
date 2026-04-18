@@ -14,60 +14,30 @@ const (
 var (
 	vttTimestampRe = regexp.MustCompile(`^(?P<s>(?:\d{1,2}:)?\d{2}:\d{2}[.,]\d{3})\s*-->\s*(?P<e>(?:\d{1,2}:)?\d{2}:\d{2}[.,]\d{3})(?P<rest>.*)$`)
 	vttTagRe       = regexp.MustCompile(`<[^>]+>`)
-	leadingTagsRe  = regexp.MustCompile(`^(?:<[^>]+>)+`)
-	trailingTagsRe = regexp.MustCompile(`(?:<[^>]+>)+$`)
 )
 
-// TranslateVTT parses VTT subtitle, translates text lines, and returns translated VTT content
+type vttCueBatch struct {
+	textLineIndices []int
+	originalText    string
+}
+
+// TranslateVTT parses VTT subtitle, translates per-timestamp cue text, and returns translated VTT content.
 func TranslateVTT(content, targetLang, sourceLang string) (string, error) {
 	lines := strings.Split(content, "\n")
 	blockedLines := markLongCueBlocks(lines)
-
-	var textIndices []int
-	var textValues []string
-
-	for i, line := range lines {
-		if blockedLines[i] {
-			lines[i] = ""
-			continue
-		}
-
-		// Remove font tags that should not appear in output
-		line = RemoveFontTags(line)
-		lines[i] = line
-
-		// Normalize timestamp lines
-		if vttTimestampRe.MatchString(strings.TrimSpace(line)) {
-			lines[i] = normalizeTimestampLine(line)
-			continue
-		}
-
-		// Skip metadata lines
-		if strings.HasPrefix(line, "WEBVTT") ||
-			strings.HasPrefix(line, "NOTE") ||
-			strings.HasPrefix(line, "STYLE") ||
-			strings.TrimSpace(line) == "" ||
-			isDigitOnly(strings.TrimSpace(line)) {
-			continue
-		}
-
-		// Extract text without tags for translation
-		clean := vttTagRe.ReplaceAllString(line, "")
-		clean = strings.TrimSpace(clean)
-
-		if clean != "" {
-			textIndices = append(textIndices, i)
-			textValues = append(textValues, clean)
-		}
-	}
-
-	if len(textValues) == 0 {
+	cues := collectVTTCueBatches(lines, blockedLines)
+	if len(cues) == 0 {
 		return strings.Join(lines, "\n"), nil
 	}
 
-	log.Printf("Starting translation of %d text lines...", len(textValues))
+	textValues := make([]string, 0, len(cues))
+	for _, cue := range cues {
+		textValues = append(textValues, cue.originalText)
+	}
 
-	// Translate all text
+	log.Printf("Starting translation of %d cue blocks...", len(textValues))
+
+	// Translate all cue text blocks.
 	translated, err := BatchTranslate(textValues, targetLang, sourceLang)
 	if err != nil {
 		return "", err
@@ -75,40 +45,152 @@ func TranslateVTT(content, targetLang, sourceLang string) (string, error) {
 
 	log.Printf("Translation completed successfully")
 
-	// Replace translated text back
+	// Replace translated cue text back.
 	for idx, trans := range translated {
-		lineIdx := textIndices[idx]
-		original := lines[lineIdx]
-
-		// Preserve leading/trailing tags
-		leadingMatch := leadingTagsRe.FindString(original)
-		trailingMatch := trailingTagsRe.FindString(original)
-
-		leadingTags := ""
-		if leadingMatch != "" {
-			leadingTags = RemoveFontTags(leadingMatch)
-		}
-
-		trailingTags := ""
-		if trailingMatch != "" {
-			trailingTags = RemoveFontTags(trailingMatch)
-		}
-
-		// Ensure translated text is single line
-		transFixed := SingleLine(trans)
-		transFixed = strings.TrimSpace(RemoveFontTags(transFixed))
-		if transFixed == "" {
-			// Keep line empty for Indonesian when post-processing removes non-subtitle notes.
-			if strings.ToLower(targetLang) != "id" {
-				// Fallback to source text if translation comes back empty.
-				transFixed = strings.TrimSpace(vttTagRe.ReplaceAllString(original, ""))
-			}
-		}
-
-		lines[lineIdx] = RemoveFontTags(leadingTags + transFixed + trailingTags)
+		applyTranslatedCue(lines, cues[idx], trans, targetLang)
 	}
 
 	return strings.Join(lines, "\n"), nil
+}
+
+func collectVTTCueBatches(lines []string, blockedLines map[int]bool) []vttCueBatch {
+	for i := range lines {
+		if blockedLines[i] {
+			lines[i] = ""
+			continue
+		}
+
+		line := RemoveFontTags(lines[i])
+		if vttTimestampRe.MatchString(strings.TrimSpace(line)) {
+			line = normalizeTimestampLine(line)
+		}
+		lines[i] = line
+	}
+
+	cues := make([]vttCueBatch, 0, 32)
+	start := 0
+	for start < len(lines) {
+		for start < len(lines) && strings.TrimSpace(lines[start]) == "" {
+			start++
+		}
+		if start >= len(lines) {
+			break
+		}
+
+		end := start
+		for end < len(lines) && strings.TrimSpace(lines[end]) != "" {
+			end++
+		}
+
+		cue, ok := buildCueBatch(lines, start, end)
+		if ok {
+			cues = append(cues, cue)
+		}
+
+		start = end
+	}
+
+	return cues
+}
+
+func buildCueBatch(lines []string, start, end int) (vttCueBatch, bool) {
+	timestampLine := -1
+	for i := start; i < end; i++ {
+		if vttTimestampRe.MatchString(strings.TrimSpace(lines[i])) {
+			timestampLine = i
+			break
+		}
+	}
+
+	if timestampLine == -1 {
+		return vttCueBatch{}, false
+	}
+
+	textLineIndices := make([]int, 0, 4)
+	textParts := make([]string, 0, 4)
+	for i := timestampLine + 1; i < end; i++ {
+		trimmed := strings.TrimSpace(lines[i])
+		if trimmed == "" || isDigitOnly(trimmed) {
+			continue
+		}
+
+		clean := strings.TrimSpace(vttTagRe.ReplaceAllString(lines[i], ""))
+		if clean == "" {
+			continue
+		}
+
+		textLineIndices = append(textLineIndices, i)
+		textParts = append(textParts, clean)
+	}
+
+	if len(textParts) == 0 {
+		return vttCueBatch{}, false
+	}
+
+	return vttCueBatch{
+		textLineIndices: textLineIndices,
+		originalText:    strings.Join(textParts, "\n"),
+	}, true
+}
+
+func applyTranslatedCue(lines []string, cue vttCueBatch, translated, targetLang string) {
+	translatedLines := splitCueTextLines(translated)
+	if len(translatedLines) == 0 {
+		if strings.ToLower(targetLang) != "id" {
+			translatedLines = splitCueTextLines(cue.originalText)
+		}
+	}
+
+	if len(translatedLines) == 0 {
+		for _, lineIdx := range cue.textLineIndices {
+			lines[lineIdx] = ""
+		}
+		return
+	}
+
+	lineSlots := len(cue.textLineIndices)
+	if lineSlots == 0 {
+		return
+	}
+
+	if len(translatedLines) <= lineSlots {
+		for i, lineIdx := range cue.textLineIndices {
+			if i < len(translatedLines) {
+				lines[lineIdx] = translatedLines[i]
+				continue
+			}
+			lines[lineIdx] = ""
+		}
+		return
+	}
+
+	for i := 0; i < lineSlots-1; i++ {
+		lines[cue.textLineIndices[i]] = translatedLines[i]
+	}
+	lines[cue.textLineIndices[lineSlots-1]] = strings.Join(translatedLines[lineSlots-1:], " ")
+}
+
+func splitCueTextLines(text string) []string {
+	normalized := strings.ReplaceAll(text, "\r\n", "\n")
+	rawLines := strings.Split(normalized, "\n")
+
+	result := make([]string, 0, len(rawLines))
+	for _, line := range rawLines {
+		fixed := strings.TrimSpace(RemoveFontTags(SingleLine(line)))
+		if fixed == "" {
+			continue
+		}
+		result = append(result, fixed)
+	}
+
+	if len(result) == 0 {
+		fallback := strings.TrimSpace(RemoveFontTags(SingleLine(normalized)))
+		if fallback != "" {
+			result = append(result, fallback)
+		}
+	}
+
+	return result
 }
 
 func markLongCueBlocks(lines []string) map[int]bool {
