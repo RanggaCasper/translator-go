@@ -9,6 +9,7 @@ DEPLOY_PATH="${DEPLOY_PATH:-/opt/server}"
 APP_BINARY="${APP_BINARY:-translator}"
 ENV_PORT="${ENV_PORT:-3000}"
 OVERWRITE_UNIT="${OVERWRITE_UNIT:-false}"
+OVERWRITE_NGINX="${OVERWRITE_NGINX:-false}"
 
 # MySQL defaults (can be overridden by .env or env vars)
 DB_HOST="${DB_HOST:-localhost}"
@@ -70,7 +71,10 @@ sudo systemctl enable nginx
 sudo systemctl restart nginx
 
 echo "==> Writing nginx config"
-sudo bash -c "cat > '${NGINX_AVAIL}'" <<EOF
+if [ -f "${NGINX_AVAIL}" ] && [ "${OVERWRITE_NGINX}" != "true" ]; then
+  echo "Nginx config already exists. Skipping (overwrite=false)."
+else
+  sudo bash -c "cat > '${NGINX_AVAIL}'" <<EOF
 server {
   listen 80;
   server_name _;
@@ -92,6 +96,7 @@ server {
   }
 }
 EOF
+fi
 
 sudo ln -sf "${NGINX_AVAIL}" "${NGINX_ENABLED}"
 
