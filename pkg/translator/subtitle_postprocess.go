@@ -8,10 +8,29 @@ import (
 )
 
 var englishSignalRe = regexp.MustCompile(`(?i)\b(i|you|he|she|we|they|it|if|and|or|but|so|need|needed|willing|hand|help|know)\b|[a-z]+'[a-z]+`)
+var englishWordTokenRe = regexp.MustCompile(`(?i)[a-z]+(?:'[a-z]+)?`)
 var formattingTagRe = regexp.MustCompile(`(?i)<\s*(/?)\s*(i|b|u|em|strong)\s*>`)
 var brokenFormattingTagRe = regexp.MustCompile(`(?i)(^|[\s"'“”‘’(\[])(/?)(i|b|u|em|strong)>`)
 var spaceBeforeCloseFormattingTagRe = regexp.MustCompile(`(?i)\s+(</\s*(i|b|u|em|strong)\s*>)`)
 var spaceAfterOpenFormattingTagRe = regexp.MustCompile(`(?i)(<\s*(i|b|u|em|strong)\s*>)\s+`)
+
+var englishStopwords = map[string]struct{}{
+	"a": {}, "an": {}, "the": {}, "this": {}, "that": {}, "these": {}, "those": {},
+	"to": {}, "of": {}, "for": {}, "from": {}, "with": {}, "in": {}, "on": {}, "at": {}, "by": {}, "over": {}, "under": {},
+	"is": {}, "are": {}, "was": {}, "were": {}, "be": {}, "been": {}, "being": {},
+	"do": {}, "does": {}, "did": {}, "may": {}, "can": {}, "could": {}, "will": {}, "would": {}, "should": {}, "shall": {},
+	"it": {}, "you": {}, "we": {}, "they": {}, "he": {}, "she": {}, "i": {},
+	"and": {}, "or": {}, "but": {}, "if": {}, "then": {}, "than": {}, "as": {},
+}
+
+var indonesianStopwords = map[string]struct{}{
+	"yang": {}, "dan": {}, "atau": {}, "tapi": {}, "tetapi": {}, "namun": {},
+	"ini": {}, "itu": {}, "di": {}, "ke": {}, "dari": {}, "untuk": {}, "dengan": {},
+	"karena": {}, "agar": {}, "supaya": {}, "sehingga": {}, "jika": {}, "kalau": {},
+	"adalah": {}, "akan": {}, "tidak": {}, "bukan": {}, "sudah": {}, "belum": {},
+	"aku": {}, "saya": {}, "kamu": {}, "dia": {}, "mereka": {}, "kami": {}, "kita": {},
+	"tak": {},
+}
 
 // PostProcessSubtitleContent normalizes stored subtitle content before returning it to clients.
 func PostProcessSubtitleContent(content, targetLang string) string {
@@ -172,7 +191,31 @@ func ensureIndonesianLine(line string) string {
 
 func looksUntranslatedEnglish(line string) bool {
 	matches := englishSignalRe.FindAllString(line, -1)
-	return len(matches) >= 2
+	if len(matches) >= 2 {
+		return true
+	}
+
+	tokens := englishWordTokenRe.FindAllString(strings.ToLower(line), -1)
+	if len(tokens) < 3 {
+		return false
+	}
+
+	englishHits := 0
+	indonesianHits := 0
+	for _, token := range tokens {
+		if _, ok := englishStopwords[token]; ok {
+			englishHits++
+		}
+		if _, ok := indonesianStopwords[token]; ok {
+			indonesianHits++
+		}
+	}
+
+	if englishHits >= 3 && englishHits > indonesianHits {
+		return true
+	}
+
+	return false
 }
 
 func normalizeFormattingTags(line string) string {

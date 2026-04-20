@@ -221,6 +221,21 @@ func TestLooksUntranslatedEnglish(t *testing.T) {
 			in:   "Classroom of the Elite",
 			want: false,
 		},
+		{
+			name: "english sentence with function words",
+			in:   "May the high bishop bless the birth Of these new couples.",
+			want: true,
+		},
+		{
+			name: "short english sentence still detected",
+			in:   "Do it a bit extravagantly.",
+			want: true,
+		},
+		{
+			name: "mixed english and indonesian line",
+			in:   "The supreme gods that preside over Langit tak berujung",
+			want: true,
+		},
 	}
 
 	for _, tt := range tests {

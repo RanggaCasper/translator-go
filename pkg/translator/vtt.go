@@ -7,8 +7,14 @@ import (
 )
 
 const (
-	maxCueTextLines = 3
-	maxCueWords     = 25
+	maxCueTextLines  = 3
+	maxCueWords      = 25
+	maxOutputLines   = 2
+	softLineChars    = 35
+	hardLineChars    = 40
+	softLineWords    = 6
+	hardLineWords    = 7
+	minLeadLineChars = 7
 )
 
 var (
@@ -129,15 +135,18 @@ func buildCueBatch(lines []string, start, end int) (vttCueBatch, bool) {
 
 	return vttCueBatch{
 		textLineIndices: textLineIndices,
-		originalText:    strings.Join(textParts, "\n"),
+		// Send cue text as a single sentence for better translation quality.
+		originalText: strings.Join(textParts, " "),
 	}, true
 }
 
 func applyTranslatedCue(lines []string, cue vttCueBatch, translated, targetLang string) {
-	translatedLines := splitCueTextLines(translated)
+	translatedLines := splitCueTextLines(translated, targetLang)
+	translatedLines = capCueOutputLines(translatedLines, maxOutputLines)
 	if len(translatedLines) == 0 {
 		if strings.ToLower(targetLang) != "id" {
-			translatedLines = splitCueTextLines(cue.originalText)
+			translatedLines = splitCueTextLines(cue.originalText, targetLang)
+			translatedLines = capCueOutputLines(translatedLines, maxOutputLines)
 		}
 	}
 
@@ -167,10 +176,10 @@ func applyTranslatedCue(lines []string, cue vttCueBatch, translated, targetLang 
 	for i := 0; i < lineSlots-1; i++ {
 		lines[cue.textLineIndices[i]] = translatedLines[i]
 	}
-	lines[cue.textLineIndices[lineSlots-1]] = strings.Join(translatedLines[lineSlots-1:], " ")
+	lines[cue.textLineIndices[lineSlots-1]] = strings.Join(translatedLines[lineSlots-1:], "\n")
 }
 
-func splitCueTextLines(text string) []string {
+func splitCueTextLines(text string, targetLang string) []string {
 	normalized := strings.ReplaceAll(text, "\r\n", "\n")
 	rawLines := strings.Split(normalized, "\n")
 
@@ -190,7 +199,164 @@ func splitCueTextLines(text string) []string {
 		}
 	}
 
+	if strings.EqualFold(strings.TrimSpace(targetLang), "id") {
+		joined := strings.TrimSpace(strings.Join(result, " "))
+		if joined == "" {
+			return result
+		}
+
+		wrapped := wrapCueLineByHeuristics(joined)
+		wrapped = rebalanceShortLeadLine(wrapped)
+
+		return capCueOutputLines(wrapped, maxOutputLines)
+	}
+
 	return result
+}
+
+func capCueOutputLines(lines []string, maxLines int) []string {
+	if maxLines <= 0 || len(lines) <= maxLines {
+		return lines
+	}
+
+	trimmed := make([]string, 0, maxLines)
+	for i := 0; i < maxLines-1; i++ {
+		trimmed = append(trimmed, lines[i])
+	}
+	trimmed = append(trimmed, strings.Join(lines[maxLines-1:], " "))
+
+	return trimmed
+}
+
+func wrapCueLineByHeuristics(text string) []string {
+	words := strings.Fields(strings.TrimSpace(text))
+	if len(words) == 0 {
+		return nil
+	}
+
+	lines := make([]string, 0, 4)
+	current := make([]string, 0, hardLineWords)
+	currentLen := 0
+
+	flush := func() {
+		if len(current) == 0 {
+			return
+		}
+		lines = append(lines, strings.Join(current, " "))
+		current = current[:0]
+		currentLen = 0
+	}
+
+	for i, word := range words {
+		wordLen := len([]rune(word))
+		addedLen := wordLen
+		if len(current) > 0 {
+			addedLen++
+		}
+
+		if len(current) > 0 && (currentLen+addedLen > hardLineChars || len(current)+1 > hardLineWords) {
+			flush()
+			addedLen = wordLen
+		}
+
+		current = append(current, word)
+		currentLen += addedLen
+
+		wordCount := len(current)
+		lastWord := current[wordCount-1]
+		remaining := len(words) - (i + 1)
+
+		if strings.HasSuffix(lastWord, ".") || strings.HasSuffix(lastWord, "!") || strings.HasSuffix(lastWord, "?") {
+			if currentLen >= minLeadLineChars || remaining == 0 {
+				flush()
+			}
+			continue
+		}
+
+		if currentLen >= hardLineChars || wordCount >= hardLineWords {
+			flush()
+			continue
+		}
+
+		if currentLen >= softLineChars && wordCount >= softLineWords {
+			flush()
+			continue
+		}
+
+		if currentLen >= softLineChars && (strings.HasSuffix(lastWord, ",") || strings.HasSuffix(lastWord, ";") || strings.HasSuffix(lastWord, ":")) {
+			flush()
+			continue
+		}
+
+		if currentLen >= 32 && remaining >= 2 && i+1 < len(words) && isNaturalPauseConjunction(words[i+1]) {
+			flush()
+		}
+	}
+
+	flush()
+	return lines
+}
+
+func rebalanceShortLeadLine(lines []string) []string {
+	if len(lines) < 2 {
+		return lines
+	}
+
+	first := strings.TrimSpace(lines[0])
+	second := strings.TrimSpace(lines[1])
+	if first == "" || second == "" {
+		return lines
+	}
+
+	if len([]rune(first)) >= minLeadLineChars {
+		return lines
+	}
+
+	firstWords := strings.Fields(first)
+	secondWords := strings.Fields(second)
+	if len(secondWords) == 0 {
+		return lines
+	}
+
+	for len(secondWords) > 0 {
+		candidateWords := append(append([]string{}, firstWords...), secondWords[0])
+		candidateLine := strings.Join(candidateWords, " ")
+
+		if len([]rune(candidateLine)) > hardLineChars || len(candidateWords) > hardLineWords {
+			break
+		}
+
+		firstWords = candidateWords
+		secondWords = secondWords[1:]
+
+		if len([]rune(candidateLine)) >= minLeadLineChars {
+			break
+		}
+	}
+
+	balanced := make([]string, 0, 2)
+	if len(firstWords) > 0 {
+		balanced = append(balanced, strings.Join(firstWords, " "))
+	}
+	if len(secondWords) > 0 {
+		balanced = append(balanced, strings.Join(secondWords, " "))
+	}
+
+	if len(balanced) == 0 {
+		return lines
+	}
+
+	return balanced
+}
+
+func isNaturalPauseConjunction(word string) bool {
+	w := strings.ToLower(strings.Trim(word, "\"'“”‘’.,!?;:()[]{}"))
+	switch w {
+	case "dan", "atau", "tapi", "tetapi", "namun", "karena", "agar", "supaya", "sehingga", "lalu", "kemudian", "sedangkan", "sementara":
+		return true
+	default:
+		return false
+	}
 }
 
 func markLongCueBlocks(lines []string) map[int]bool {
