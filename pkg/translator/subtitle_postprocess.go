@@ -160,7 +160,10 @@ func stripLeadingPunctuationPrefix(line string) string {
 	if strings.HasPrefix(trimmed, "<") {
 		return trimmed
 	}
-	trimmed = strings.TrimLeft(trimmed, ".,!?/+-=()[]{}|\\'\";:~*_`")
+	if strings.HasPrefix(trimmed, "[") || strings.HasPrefix(trimmed, "- [") || strings.HasPrefix(trimmed, "-[") {
+		return trimmed
+	}
+	trimmed = strings.TrimLeft(trimmed, ".,!?/+-=(){}|\\'\";:~*_`")
 	trimmed = strings.TrimLeft(trimmed, " ")
 	return strings.TrimSpace(trimmed)
 }

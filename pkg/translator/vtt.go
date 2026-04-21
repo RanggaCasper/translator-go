@@ -205,6 +205,10 @@ func splitCueTextLines(text string, targetLang string) []string {
 			return result
 		}
 
+		if stageDirectionSplit := splitStageDirectionSuffix(joined); len(stageDirectionSplit) > 0 {
+			return capCueOutputLines(stageDirectionSplit, maxOutputLines)
+		}
+
 		wrapped := wrapCueLineByHeuristics(joined)
 		wrapped = rebalanceShortLeadLine(wrapped)
 
@@ -226,6 +230,26 @@ func capCueOutputLines(lines []string, maxLines int) []string {
 	trimmed = append(trimmed, strings.Join(lines[maxLines-1:], " "))
 
 	return trimmed
+}
+
+func splitStageDirectionSuffix(text string) []string {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return nil
+	}
+
+	idx := strings.LastIndex(trimmed, " - [")
+	if idx <= 0 {
+		return nil
+	}
+
+	first := strings.TrimSpace(trimmed[:idx])
+	second := strings.TrimSpace(trimmed[idx+1:])
+	if first == "" || !strings.HasPrefix(second, "- [") {
+		return nil
+	}
+
+	return []string{first, second}
 }
 
 func wrapCueLineByHeuristics(text string) []string {

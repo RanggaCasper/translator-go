@@ -207,3 +207,13 @@ func TestSplitCueTextLines_RebalancesVeryShortFirstLine(t *testing.T) {
 		t.Fatalf("expected first line length to be at least %d chars, got %q", minLeadLineChars, got[0])
 	}
 }
+
+func TestSplitCueTextLines_StageDirectionSuffixGetsOwnLine(t *testing.T) {
+	text := "[TETIA] Coco! Di sini! - [Coco terengah-engah]"
+	got := splitCueTextLines(text, "id")
+	want := []string{"[TETIA] Coco! Di sini!", "- [Coco terengah-engah]"}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected stage direction split: got %#v want %#v", got, want)
+	}
+}

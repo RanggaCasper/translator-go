@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.6] - 2026-04-21
+
+### Fixed
+- Preserve speaker tags wrapped by square brackets, such as [QIFREY], during Indonesian subtitle post-processing.
+- Prevent accidental removal of stage-direction prefixes like - [Coco terengah-engah] in cleaned subtitle lines.
+- Improve Indonesian cue line splitting so mixed dialogue and stage direction text is rendered as:
+	dialogue line first, then stage-direction line.
+
+### Added
+- Regression test coverage for bracketed speaker preservation and stage-direction suffix line splitting.
+
+## [1.0.5] - 2026-04-20
+
+### Improved
+- Improve Indonesian subtitle translation detection and cue wrapping.
+- Improve VTT cue handling by combining multi-line cue text before translation for better translation quality.
+- Apply Indonesian subtitle wrapping heuristics with a two-line output cap to keep cues readable.
+- Expand translator test coverage for cue processing and Indonesian post-processing behavior.
+
 ## [1.0.4] - 2026-04-18
 
 ### Improved
@@ -59,3 +78,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [1.0.2]: https://github.com/RanggaCasper/translator-go/releases/tag/v1.0.2
 [1.0.3]: https://github.com/RanggaCasper/translator-go/releases/tag/v1.0.3
 [1.0.4]: https://github.com/RanggaCasper/translator-go/releases/tag/v1.0.4 
+[1.0.5]: https://github.com/RanggaCasper/translator-go/releases/tag/v1.0.5
+[1.0.6]: https://github.com/RanggaCasper/translator-go/compare/v1.0.5...main

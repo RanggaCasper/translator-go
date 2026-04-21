@@ -186,6 +186,23 @@ func TestPostProcessSubtitleContent_PreservesFormattingTags(t *testing.T) {
 	}
 }
 
+func TestPostProcessSubtitleContent_PreservesSpeakerBracketsAndStageDirectionPrefix(t *testing.T) {
+	input := "WEBVTT\n\n00:06:04.239 --> 00:06:06.533\n[QIFREY] Ada banyak jenis sihir,\n- [Coco terengah-engah]\n"
+	got := PostProcessSubtitleContent(input, "id")
+
+	if !strings.Contains(got, "[QIFREY] Ada banyak jenis sihir,") {
+		t.Fatalf("expected speaker bracket prefix to be preserved, got: %q", got)
+	}
+
+	if strings.Contains(got, "\nQIFREY] Ada banyak jenis sihir,") {
+		t.Fatalf("expected leading '[' not to be removed, got: %q", got)
+	}
+
+	if !strings.Contains(got, "- [Coco terengah-engah]") {
+		t.Fatalf("expected stage direction prefix to be preserved, got: %q", got)
+	}
+}
+
 func TestPostProcessSubtitleContent_RepairsBrokenOpeningFormattingTag(t *testing.T) {
 	input := "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nI>Kekayaan, ketenaran, kekuasaan...</I>\n"
 	got := PostProcessSubtitleContent(input, "id")
